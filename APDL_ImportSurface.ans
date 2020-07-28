@@ -1,0 +1,133 @@
+!!! Procedure for Generating Roughness Values 
+! Read array data from a file, create surface in APDL
+
+/clear
+/PREP7
+
+! REMEMBER TO UPDATE FORMAT AND FILENAME FOR SAVING IGES
+COL_AMOUNT = 64
+PixelWidth = 1.1-05
+
+!!! Read file and create array
+/INQUIRE, ROW_AMOUNT, LINES, 'C:\XXXX.csv' ! Inquire the number of lines in file
+*DEL, SURFKPZ ! Delete any previous array
+*DIM, SURFKPZ, , ROW_AMOUNT, COL_AMOUNT ! Defines an array: Name, Type, #Rows, #Columns, #Planes
+*VREAD, SURFKPZ(1,1), 'C:\XXXX.csv',,, JIK, COL_AMOUNT, ROW_AMOUNT ! Reads data and produces an array parameter vector or matrix
+(64F15.0) ! Format
+
+! Misc settings
+/NERR, 0		! Disable warning and error messages
+
+! Variables
+LENGTH = COL_AMOUNT-1
+DEPTH = LENGTH*0.6*PixelWidth
+
+! Create Keypoints
+*DO, ii, 0, LENGTH
+	*DO, jj, 0, LENGTH
+		k,,ii*PixelWidth, jj*PixelWidth, DEPTH+SURFKPZ(ii+1,jj+1)
+	*ENDDO
+*ENDDO
+
+! Create Lines along X and Y
+*DO, ii, 0, COL_AMOUNT-1
+	kk = ii*COL_AMOUNT
+	*DO, jj, 1, LENGTH
+		L, jj+kk, jj+kk+1 ! Create lines along Y
+	*ENDDO
+*ENDDO
+*DO, yy, 1, COL_AMOUNT
+	*DO, xx, 0, COL_AMOUNT-2
+		L, yy+xx*COL_AMOUNT, yy+COL_AMOUNT+xx*COL_AMOUNT ! Create lines along X
+	*ENDDO
+*ENDDO
+
+! Create areas for the rough surface
+*DO, ii, 0, LENGTH-1
+	*DO, jj, 0, LENGTH-1
+		LSEL, S, LOC, X, ii*PixelWidth, (ii+1)*PixelWidth
+		LSEL, R, LOC, Y, jj*PixelWidth, (jj+1)*PixelWidth
+		AL,ALL 
+	*ENDDO
+*ENDDO
+
+! Bottom corner keypoints
+k,, 0, 0,0
+k,, 0, LENGTH*PixelWidth, 0
+k,, LENGTH*PixelWidth, LENGTH*PixelWidth, 0
+k,, LENGTH*PixelWidth, 0, 0
+
+! ! Bottom KP indices
+bottom1 = COL_AMOUNT*COL_AMOUNT + 1
+bottom2 = bottom1 + 1
+bottom3 = bottom1 + 2
+bottom4 = bottom1 + 3
+
+! ! Surface corner KP indices
+TopCorner1 = 1
+TopCorner2 = COL_AMOUNT
+TopCorner3 = COL_AMOUNT*COL_AMOUNT
+TopCorner4 = COL_AMOUNT*COL_AMOUNT - COL_AMOUNT + 1
+
+! ! Create lines with the top and bottom corner KP's defined above
+L, TopCorner1, bottom1
+L, TopCorner2, bottom2
+L, TopCorner3, bottom3
+L, TopCorner4, bottom4
+L, bottom1, bottom2
+L, bottom2, bottom3
+L, bottom3, bottom4
+L, bottom4, bottom1
+
+! Create lines for all the "sides" of the block
+! USING KEYPOINTS NOT LINES !!
+LSEL, S, LOC, X, 0
+AL, ALL ! Create area from the selected lines
+LSEL, S, LOC, Y, 0 
+AL, ALL 
+LSEL, S, LOC, X, LENGTH*PixelWidth,LENGTH*PixelWidth*2!
+AL, ALL
+LSEL, S, LOC, Y, LENGTH*PixelWidth,LENGTH*PixelWidth*2
+AL, ALL
+LSEL, S, LOC, Z, 0
+AL, ALL
+
+! Create volume using all selected areas
+LSEL,ALL
+ASEL, ALL
+VA, ALL
+
+!!! Write model as .iges
+! ALLSEL,BELOW,ALL
+! CDOPT,IGES  
+! CDWRITE,SOLID,'','',,'C:/XXXX','iges'
+
+ 
+!! Add the second surface
+! ASEL,NONE
+! KSEL,ALL
+! *GET, KPZMAX, KP, 0, MXLOC, Z ! Obtain maximum Z-coordinate
+! WPOFFS,,,KPZMAX ! Offset working plane
+! RECT, 0, LENGTH*PixelWidth, 0, LENGTH*PixelWidth
+! ASEL,ALL
+
+!!! Mesh the volume
+! MSHAPE, 1, 3D ! specifies the element shape = Tri (volume mesh)
+! MSHKEY, 0 ! Specifies free meshing 
+! CM, _Y, VOLU ! Groups geometry items into a component
+! VSEL, , , , 1 
+! VSEL, ALL
+! CM, _Y1, VOLU 
+! CHKMSH, 'VOLU'   
+! CMSEL, S, _Y  
+! VMESH, _Y1   
+! CMDELE, _Y   
+! CMDELE, _Y1  
+! CMDELE, _Y2  
+
+!!! Viewport stuff
+! /VIEW, 1, 0.6, 0.6, 0.4
+! /ANG, 1, -110
+! /AUTO, 1 ! Fit to view
+! /REPLOT ! Refresh
+! EPLOT ! Plot
